@@ -25,7 +25,6 @@ import de.gerrygames.viarewind.utils.ChatUtil;
 import de.gerrygames.viarewind.utils.PacketUtil;
 
 import java.util.ArrayList;
-import java.util.TimerTask;
 import java.util.UUID;
 
 public class PlayerPackets {
@@ -285,6 +284,12 @@ public class PlayerPackets {
 			public void registerMap() {
 				map(Type.BOOLEAN);
 				handler(packetWrapper -> {
+					//Sending any queued animations.
+					PacketWrapper animation = null;
+					while((animation = ((Protocol1_8TO1_9)protocol).animationsToSend.poll()) != null) {
+						PacketUtil.sendToServer(animation, Protocol1_8TO1_9.class, true, true);
+					}
+
 					EntityTracker tracker = packetWrapper.user().get(EntityTracker.class);
 					int playerId = tracker.getPlayerId();
 					if (tracker.isInsideVehicle(playerId)) packetWrapper.cancel();
@@ -301,9 +306,17 @@ public class PlayerPackets {
 				map(Type.DOUBLE);
 				map(Type.BOOLEAN);
 				handler(packetWrapper -> {
+					//Sending any queued animations.
+					PacketWrapper animation = null;
+					while((animation = ((Protocol1_8TO1_9)protocol).animationsToSend.poll()) != null) {
+						PacketUtil.sendToServer(animation, Protocol1_8TO1_9.class,
+								true, true);
+					}
+
 					PlayerPosition pos = packetWrapper.user().get(PlayerPosition.class);
 					if (pos.getConfirmId() != -1) return;
-					pos.setPos(packetWrapper.get(Type.DOUBLE, 0), packetWrapper.get(Type.DOUBLE, 1), packetWrapper.get(Type.DOUBLE, 2));
+					pos.setPos(packetWrapper.get(Type.DOUBLE, 0), packetWrapper.get(Type.DOUBLE, 1),
+							packetWrapper.get(Type.DOUBLE, 2));
 					pos.setOnGround(packetWrapper.get(Type.BOOLEAN, 0));
 				});
 				handler(packetWrapper -> packetWrapper.user().get(BossBarStorage.class).updateLocation());
@@ -318,6 +331,12 @@ public class PlayerPackets {
 				map(Type.FLOAT);
 				map(Type.BOOLEAN);
 				handler(packetWrapper -> {
+					//Sending any queued animations.
+					PacketWrapper animation = null;
+					while((animation = ((Protocol1_8TO1_9)protocol).animationsToSend.poll()) != null) {
+						PacketUtil.sendToServer(animation, Protocol1_8TO1_9.class, true, true);
+					}
+
 					PlayerPosition pos = packetWrapper.user().get(PlayerPosition.class);
 					if (pos.getConfirmId() != -1) return;
 					pos.setYaw(packetWrapper.get(Type.FLOAT, 0));
@@ -339,6 +358,12 @@ public class PlayerPackets {
 				map(Type.FLOAT);
 				map(Type.BOOLEAN);
 				handler(packetWrapper -> {
+					//Sending any queued animations.
+					PacketWrapper animation = null;
+					while((animation = ((Protocol1_8TO1_9)protocol).animationsToSend.poll()) != null) {
+						PacketUtil.sendToServer(animation, Protocol1_8TO1_9.class, true, true);
+					}
+
 					double x = packetWrapper.get(Type.DOUBLE, 0);
 					double y = packetWrapper.get(Type.DOUBLE, 1);
 					double z = packetWrapper.get(Type.DOUBLE, 2);
@@ -348,10 +373,12 @@ public class PlayerPackets {
 
 					PlayerPosition pos = packetWrapper.user().get(PlayerPosition.class);
 					if (pos.getConfirmId() != -1) {
-						if (pos.getPosX() == x && pos.getPosY() == y && pos.getPosZ() == z && pos.getYaw() == yaw && pos.getPitch() == pitch) {
+						if (pos.getPosX() == x && pos.getPosY() == y && pos.getPosZ() == z
+								&& pos.getYaw() == yaw && pos.getPitch() == pitch) {
 							PacketWrapper confirmTeleport = packetWrapper.create(0x00);
 							confirmTeleport.write(Type.VAR_INT, pos.getConfirmId());
-							PacketUtil.sendToServer(confirmTeleport, Protocol1_8TO1_9.class, true, true);
+							PacketUtil.sendToServer(confirmTeleport,
+									Protocol1_8TO1_9.class, true, true);
 
 							pos.setConfirmId(-1);
 						}
@@ -360,7 +387,7 @@ public class PlayerPackets {
 						pos.setYaw(yaw);
 						pos.setPitch(pitch);
 						pos.setOnGround(onGround);
-                        packetWrapper.user().get(BossBarStorage.class).updateLocation();
+						packetWrapper.user().get(BossBarStorage.class).updateLocation();
 					}
 				});
 			}
@@ -434,18 +461,20 @@ public class PlayerPackets {
 			public void registerMap() {
 				handler(packetWrapper -> {
 					packetWrapper.cancel();
-					final PacketWrapper delayedPacket = PacketWrapper.create(0x1A, null, packetWrapper.user());
+
+					/* We have to add ArmAnimation to a queue to be sent on PacketPlayInFlying. In 1.9,
+					 * PacketPlayInArmAnimation is sent after PacketPlayInUseEntity, not before like it used to be.
+					 * However, all packets are sent before PacketPlayInFlying. We'd just do a normal delay, but
+					 * it would cause the packet to be sent after PacketPlayInFlying, potentially false flagging
+					 * anticheats that check for this behavior from clients. Since all packets are sent before
+					 * PacketPlayInFlying, if we queue it to be sent right before PacketPlayInFlying is processed,
+					 * we can be certain it will be sent after PacketPlayInUseEntity */
+					packetWrapper.cancel();
+					final PacketWrapper delayedPacket = PacketWrapper.create(0x1A,
+							null, packetWrapper.user());
 					delayedPacket.write(Type.VAR_INT, 0);  //Main Hand
-					//delay packet in order to deal damage to entities
-					//the cooldown value gets reset by this packet
-					//1.8 sends it before the use entity packet
-					//1.9 afterwards
-					Protocol1_8TO1_9.TIMER.schedule(new TimerTask() {
-						@Override
-						public void run() {
-							PacketUtil.sendToServer(delayedPacket, Protocol1_8TO1_9.class);
-						}
-					}, 5);
+
+					((Protocol1_8TO1_9)protocol).animationsToSend.add(delayedPacket);
 				});
 				handler(packetWrapper -> {
 					packetWrapper.user().get(BlockPlaceDestroyTracker.class).updateMining();

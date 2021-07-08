@@ -14,13 +14,14 @@ import de.gerrygames.viarewind.protocol.protocol1_8to1_9.packets.*;
 import de.gerrygames.viarewind.protocol.protocol1_8to1_9.storage.*;
 import de.gerrygames.viarewind.utils.Ticker;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.Timer;
+import java.util.*;
 
 public class Protocol1_8TO1_9 extends AbstractProtocol<ClientboundPackets1_9, ClientboundPackets1_8,
 		ServerboundPackets1_9, ServerboundPackets1_8> {
 	public static final Timer TIMER = new Timer("ViaRewind-1_8TO1_9", true);
+
+	public Queue<PacketWrapper> animationsToSend = new LinkedList<>();
+
 	public static final Set<String> VALID_ATTRIBUTES = new HashSet<>();
 	public static final ValueTransformer<Double, Integer> TO_OLD_INT = new ValueTransformer<Double, Integer>(Type.INT) {
 		public Integer transform(PacketWrapper wrapper, Double inputValue) {
